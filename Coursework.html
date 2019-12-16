@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Space Cat</title>
+	</head>
+
+	<body>
+		<p align="center">
+			<canvas id="gameCanvas" style="background:#220000" width="700" height="500" align="right"></canvas>
+		</p>
+
+		<audio id="jump">
+			<source src = "Jump.mp3">
+		</audio>
+
+		<audio id="gameMusic">
+			<source src = "Music.mp3">
+		</audio>
+
+		<script>
+			var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+			window.requestAnimationFrame = requestAnimationFrame;
+			
+			//Game Canvas
+			var canvas = document.getElementById("gameCanvas");
+			var width = 1600;
+			var height = 900;
+			var ctx = canvas.getContext("2d");
+
+			//Player Variables
+			var player;
+			var jumpModifier = 5;
+			var playerHealth = 3;
+			var playerScore = 0;
+			var finalScore;
+
+			//Jumping Logic
+			var playerFalling = true;
+			var playerOnGround = false;
+			var playerJumping = false;
+			var playerCanJump = false;
+
+			//Enemy Variables
+			var enemies = [];
+			var newEnemySpawnX;
+			var newEnemySpawnY;
+
+			//Game Logic
+			const gameStates = {
+				STARTSCREEN: 'startscreen',
+				GAME: 'maingame',
+				GAMEOVER: 'gameover'
+			};
+
+			let currentGameState = gameStates.startScreen;
+			var keys = [];
+
+			var gradient;
+
+			var timer = false;
+
+			//Level Variables
+			let shortPlatform = [];
+			let longPlatform = [];
+			var levelBorder;
+			var Background1;
+			var Background2;
+			var Foreground1;
+			var Foreground2;
+			var scrollSpeed = 0.15;
+
+			class gameObject
+			{
+				constructor(positionX, positionY, imageSource, spriteWidth, spriteHeight, velocityX, velocityY, gravity, gravitySpeed, friction)
+				{
+					this.positionX = positionX;
+					this.positionY = positionY;
+					this.image = new Image();
+					this.image.src = imageSource;
+					this.spriteWidth = spriteWidth;
+					this.spriteHeight = spriteHeight;
+					this.velocityX = velocityX;
+					this.velocityY = velocityY;
+					this.gravity = gravity;
+					this.gravitySpeed = gravitySpeed;
+					this.friction = friction;
+				}
+
+				applyGravity()
+				{
+					//Enable Gravity
+					this.gravitySpeed += this.gravity;
+					this.positionY += this.velocityY + this.gravitySpeed;
+				}
+
+				applyMovement()
+				{
+					//Enable Movement
+					this.velocityX *= this.friction;
+					this.positionX += this.velocityX;
+				}
+
+				renderObject()
+				{
+					ctx.rect(this.positionX, this.positionY, this.spriteWidth, this.spriteHeight);
+					ctx.drawImage(this.image, this.positionX, this.positionY, this.spriteWidth, this.spriteHeight);
+				}
+			}
+
+			window.addEventListener("load", function() {start(); update();});
+
+			function start() 
+			{
+				currentGameState = gameStates.STARTSCREEN;
+
+				canvas.width = width;
+				canvas.height = height;
+
+				jump.volume = 0.25;
+				gameMusic.volume = 0.1;
+
+				gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+				gradient.addColorStop("0"," blue");
+				gradient.addColorStop("0.5", "cyan");
+				gradient.addColorStop("1.0", "blue");
+
+				initObjects();
+			}
+
+			function initObjects()
+			{
+				player = new gameObject(150, 50, "spacecat.png", 55, 100, 0, 0, 0.05, 0, 0.8);
+
+				Background1 = new gameObject(0, 0, "Background1.png", 1600, 900, 0, 0, 0, 0, 0);
+				Background2 = new gameObject(1600, 0, "Background1.png", 1600, 900, 0, 0, 0, 0, 0);
+
+				Foreground1 = new gameObject(0, 0, "Foreground2.png", 1600, 900, 0, 0, 0, 0, 0);
+				Foreground2 = new gameObject(-1600, 0, "Foreground2.png", 1600, 900, 0, 0, 0, 0, 0);
+
+				levelBorder = new gameObject(0, 0, "GameBorder.png", 1600, 900, 0, 0, 0, 0, 0);
+
+				for (var i = 0; i < 4; i++) 
+				{		
+					longPlatform.push(new gameObject(0, 0, "longPlatform.png", 400, 100, 0, 0, 0.05, 0, 0.8));
+				}	
+
+				for (var i = 0; i < 6; i++) 
+				{		
+					shortPlatform.push(new gameObject(0, 0, "shortPlatform.png", 200, 100, 0, 0, 0.05, 0, 0.8));
+				}
+
+				//Long Platform Coords
+				longPlatform[0].positionX = 100; longPlatform[0].positionY = 200;
+				longPlatform[1].positionX = 1100; longPlatform[1].positionY = 200;
+				longPlatform[2].positionX = 100; longPlatform[2].positionY = 600;
+				longPlatform[3].positionX = 1100; longPlatform[3].positionY = 600;
+
+				//Short Platform Coords
+				shortPlatform[0].positionX = 700; shortPlatform[0].positionY = 200;
+				shortPlatform[1].positionX = 100; shortPlatform[1].positionY = 400;
+				shortPlatform[2].positionX = 500; shortPlatform[2].positionY = 400;
+				shortPlatform[3].positionX = 900; shortPlatform[3].positionY = 400;
+				shortPlatform[4].positionX = 1300; shortPlatform[4].positionY = 400;
+				shortPlatform[5].positionX = 700; shortPlatform[5].positionY = 600;
+			}
+
+			function backgroundScroll()
+			{
+				Background1.renderObject();
+				Background2.renderObject();
+				Foreground1.renderObject();
+				Foreground2.renderObject();
+
+				Background1.applyMovement();
+				Background2.applyMovement();
+				Foreground1.applyMovement();
+				Foreground2.applyMovement();
+
+				Background1.positionX -= scrollSpeed;
+				Background2.positionX -= scrollSpeed;
+
+				if (Background1.positionX + Background1.spriteWidth < 0)
+				{
+					Background1.positionX = Background2.positionX + Background2.spriteWidth;
+				}
+				if (Background2.positionX + Background2.spriteWidth < 0)
+				{
+					Background2.positionX = Background1.positionX + Background1.spriteWidth;
+				}
+
+				Foreground1.positionX += scrollSpeed;
+				Foreground2.positionX += scrollSpeed;
+
+				if (Foreground1.positionX > width)
+				{
+					Foreground1.positionX = Foreground2.positionX - Foreground2.spriteWidth;
+				}
+				if (Foreground2.positionX > width)
+				{
+					Foreground2.positionX = Foreground1.positionX - Foreground1.spriteWidth;
+				}
+			}
+
+			function startScreen()
+			{
+				if(keys[32])
+				{
+					currentGameState = gameStates.GAME;
+				}
+
+				playerScore = 0;
+
+				ctx.font = "30px Arial";
+				// Fill with gradient
+				ctx.fillStyle = gradient;
+				ctx.fillText("Use left and right arrows to move. Use up arrow to jump. Avoid the enemies!", canvas.width/2, canvas.height/3);
+				ctx.fillText("Press Space to start", canvas.width/2, canvas.height/2);
+				ctx.textAlign = "center";
+			}
+
+			function update() 
+			{
+				ctx.clearRect(0, 0, width, height);
+
+				backgroundScroll();
+
+				switch(currentGameState)
+				{
+					case gameStates.STARTSCREEN:
+					startScreen();
+					break;
+
+					case gameStates.GAME:
+					mainGame();
+					break;
+
+					case gameStates.GAMEOVER:
+					gameOver();
+					break;
+				}
+
+				requestAnimationFrame(update);
+			}
+
+			var dir;
+			var dir2;
+			function mainGame()
+			{
+				gameMusic.play();
+
+				if (!timer) //Only happens once upon mainGame() call
+				{
+					player.positionX = 150; //Respawn Player
+					player.positionY = 50; 
+
+					enemies.length = 0; //Delete all Enemies
+
+					const enemySpawnInterval = setInterval(function() 
+					{	
+						enemies.push(new gameObject(newEnemySpawnX, newEnemySpawnY, "spacerobot.png", 55, 100, 0, 0, 0, 0, 0.8));
+
+						decideEnemySpawn();
+
+						for (var i = 0; i < enemies.length; i++) 
+						{		
+							//enemies[i].velocityX = 0;
+							//enemies[i].velocityY = 0;
+						}	
+					}, 5000);
+
+					timer = true;
+				}
+
+				player.applyMovement();
+
+				levelBorder.renderObject();
+
+				player.renderObject();
+
+				for (var i = 0; i < enemies.length; i++) 
+				{
+					enemies[i].renderObject();
+				}
+
+				playerScore++;
+
+				ctx.font = "30px Arial";
+				// Fill with gradient
+				ctx.fillStyle = "white";
+				ctx.fillText("Score: " + playerScore, 100, 95);
+				ctx.textAlign = "left";
+
+				enemyBehaviour();
+				playerBehaviour();
+
+				//Debug
+				if(keys[81])
+				{
+					currentGameState = gameStates.GAMEOVER;
+				}
+
+				if(player.positionY < 100)
+				{
+					player.positionY = 100;
+				}
+
+				//Player on Bottom Border
+				var levelBottom = 800 - player.spriteHeight;
+				if(player.positionY > levelBottom)
+				{
+					//console.log("Player on Border!");
+					player.positionY = levelBottom;
+					playerFalling = false;
+					playerOnGround = true;
+					playerJumping = false;
+				}
+
+				//Player on Platform
+				if (!playerFalling && playerOnGround)
+				{
+					if (!playerJumping)
+					{
+						//player.gravity = 0;
+						player.velocityY = 0;
+						player.gravitySpeed = 0;
+					}
+					
+					playerCanJump = true;
+				}
+
+				//Player is Falling
+				if (playerFalling)
+				{
+					//console.log("Player Falling!");
+					player.gravity = 0.05;
+					player.applyGravity();
+					playerJumping = false;
+					playerCanJump = false;
+				}
+
+				if (dir === null && dir2 === null)
+				{
+					playerFalling = true;
+				}
+
+				for (var i = 0; i < shortPlatform.length; i++) 
+				{
+					shortPlatform[i].renderObject();
+
+					// check if collide with players
+					dir = colCheck(player, shortPlatform[i]);
+
+					if (dir === "t")
+					{
+						playerFalling = false;
+						playerOnGround = true;
+					} 
+				}
+
+				for (var x = 0; x < longPlatform.length; x++) 
+				{
+					longPlatform[x].renderObject();
+
+					// check if collide with players
+					dir2 = colCheck(player, longPlatform[x]);
+
+					if (dir2 === "t")
+					{
+						playerFalling = false;	
+						playerOnGround = true;
+					} 
+				}
+			}
+
+			function decideEnemySpawn()
+			{
+				//SPAWN ALONG Y AXIS
+				newEnemySpawnY = randomIntFromInterval(0,900);
+
+				if ((newEnemySpawnY > 0 && newEnemySpawnY < 100) || (newEnemySpawnY > 800 && newEnemySpawnY < 900))
+				{
+					//Spawn in top or bottom border
+					newEnemySpawnX = randomIntFromInterval(0,1600);			
+				}
+
+				if (newEnemySpawnY > 100 && newEnemySpawnY < 800)
+				{
+					//Spawn in left or right border
+					var LeftOrRight = randomIntFromInterval(1, 2);
+
+					if(LeftOrRight == 1) //Spawn on Left
+					{
+						newEnemySpawnX = randomIntFromInterval(0, 100);
+					}
+
+					if(LeftOrRight == 2) //Spawn on Right
+					{
+						newEnemySpawnX = randomIntFromInterval(1500, 1600);
+					}
+				}		
+			}
+
+			function enemyBehaviour()
+			{
+				for (let i = 0; i < enemies.length; i++) 
+				{
+					enemies[i].applyMovement();
+
+					enemies[i].velocityY *= enemies[i].friction;
+					enemies[i].positionY += enemies[i].velocityY;
+
+					var dx = player.positionX - enemies[i].positionX;
+					var dy = player.positionY - enemies[i].positionY;
+
+					if (dx * dx > 500) 
+					{
+						enemies[i].velocityX = dx * 0.005;
+					}
+
+					if (dy * dy > 1000) 
+					{	
+						enemies[i].velocityY = dy * 0.005;
+					}
+
+					if (colCheck(player, enemies[i]))
+					{
+						currentGameState = gameStates.GAMEOVER;
+					}
+				}
+			}
+
+			function playerBehaviour()
+			{
+				// right arrow
+				if (keys[39]) 
+				{
+					if(player.positionX<(canvas.width-player.spriteWidth-121))
+					{
+						player.velocityX++;
+					}
+				}
+
+				// left arrow
+				if (keys[37]) 
+				{
+					if(player.positionX > 121)
+					{
+						player.velocityX--;
+					}
+				}
+
+				// up arrow
+				if (keys[38] && playerOnGround && !playerFalling && !playerJumping)
+				{
+					if(player.positionY > 100)
+					{
+						playerJumping = true;
+						player.velocityY -= jumpModifier;
+						jump.play();
+					}
+				}
+			}
+
+			function gameOver()
+			{
+				timer = false;
+
+				if(keys[32])
+				{
+					currentGameState = gameStates.STARTSCREEN;
+				}
+
+				finalScore = playerScore;
+
+				ctx.font = "30px Arial";
+
+				// Fill with gradient
+				ctx.fillStyle = gradient;
+
+				ctx.fillText("Game Over! Your score is " + finalScore, canvas.width/2, canvas.height/3);
+				ctx.fillText("Press Space to restart!", canvas.width/2, canvas.height/2);
+				ctx.textAlign = "center";
+			}
+
+			function randomIntFromInterval(min, max) 
+			{ 
+				// min and max included 
+  				return Math.floor(Math.random() * (max - min + 1) + min);
+			}
+
+			function colCheck(shapeA,shapeB) 
+			{
+				//get vectors to check against
+				var vX = (shapeA.positionX + (shapeA.spriteWidth / 2)) - (shapeB.positionX + (shapeB.spriteWidth / 2)),
+				vY = (shapeA.positionY + (shapeA.spriteHeight / 2)) - (shapeB.positionY + (shapeB.spriteHeight / 2)),
+
+				// add the half widths and half heights of the objects
+				hWidths = (shapeA.spriteWidth / 2) + (shapeB.spriteWidth / 2),
+				hHeights = (shapeA.spriteHeight / 2) + (shapeB.spriteHeight / 2);
+				var colDir = null;
+				// if the x and y vector are less than the half width or half height, they we must be inside the object, causing a collision
+				if (Math.abs(vX) < hWidths && Math.abs(vY) < hHeights) 
+				{
+					// figures out on which side we are colliding (top, bottom, left, or right)
+					var oX = hWidths - Math.abs(vX),
+						oY = hHeights - Math.abs(vY);
+					if (oX >= oY) 
+					{
+						if (vY > 0) 
+						{
+							colDir = "b";
+							shapeA.positionY += oY;
+						} 
+						else 
+						{					
+							colDir = "t";
+							shapeA.positionY -= oY;
+						}
+					} 
+					else
+					{
+						if (vX > 0) 
+						{
+							colDir = "l";
+							shapeA.positionX += oX;
+						} 
+						else 
+						{
+							colDir = "r";
+							shapeA.positionX -= oX;
+						}
+					}
+				}	
+
+				return colDir;
+			}
+
+			document.body.addEventListener("keydown", function (e) 
+			{
+				keys[e.keyCode] = true;
+
+				isKeyPressed = true;
+			});
+
+			document.body.addEventListener("keyup", function (e) 
+			{
+				keys[e.keyCode] = false;
+
+				isKeyPressed = false;
+			});
+
+		</script>
+	</body>
+</html>
